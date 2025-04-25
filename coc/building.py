@@ -328,6 +328,7 @@ class Building(DataContainer):
             
         # Calculate supercharged stats based on level and supercharge_level
         # This is a placeholder - actual implementation would use game data
+        # TODO: Implement actual supercharge stats
         supercharge_multiplier = 1.0 + (0.1 * self.supercharge_level)
         
         stats = {}

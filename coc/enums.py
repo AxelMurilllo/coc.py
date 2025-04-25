@@ -144,13 +144,15 @@ class Resource(ExtendedEnum):
     shiny_ore = "CommonOre"
     glowy_ore = "RareOre"
     starry_ore = "EpicOre"
+    gems = "Diamonds"
 
     @property
     def in_game_name(self) -> str:
         """Get a neat client-facing string value for the resource."""
         lookup = {"Elixir": "Elixir", "Elixir2": "Builder Elixir",
                   "DarkElixir": "Dark Elixir", "Gold": "Gold", "Gold2": "Builder Gold",
-                  "CommonOre": "Shiny Ore", "RareOre": "Glowy Ore", "EpicOre": "Starry Ore"}
+                  "CommonOre": "Shiny Ore", "RareOre": "Glowy Ore", "EpicOre": "Starry Ore",
+                  "Diamonds": "Gems"}
         return lookup[self.value]
 
 
@@ -377,3 +379,106 @@ UNRANKED_LEAGUE_DATA = {
         "tiny": "https://api-assets.clashofclans.com/leagues/36/e--YMyIexEQQhE4imLoJcwhYn6Uy8KqlgyY3_kFV6t4.png",
     },
 }
+
+#taken from buildings.json
+BUILDING_ORDER = [
+    "Army Camp",
+    "Town Hall",
+    "Elixir Collector",
+    "Elixir Storage",
+    "Gold Mine",
+    "Gold Storage",
+    "Barracks",
+    "Laboratory",
+    "Cannon",
+    "Archer Tower",
+    "Wall",
+    "Wizard Tower",
+    "Air Defense",
+    "Mortar",
+    "Clan Castle",
+    "Builder Hut",
+    "Communication Mast",
+    "Goblin Town Hall", #npc
+    "Goblin Hut", #npc
+    "Hidden Tesla",
+    "Spell Factory",
+    "X-Bow",
+    "Barbarian King Altar",
+    "Dark Elixir Pump",
+    "Dark Elixir Storage",
+    "Archer Queen Altar",
+    "Dark Barracks",
+    "Inferno Tower",
+    "Air Sweeper",
+    "Dark Spell Factory",
+    "Grand Warden Altar",
+    "Eagle Artillery",
+    "Bomb Tower",
+    "Builder Base Wall",
+    "Builder Base Builder Hall",
+    "Builder Base Elixir Pump",
+    "Builder Base Elixir Storage",
+    "Builder Base Gold Mine",
+    "Builder Base Gold Storage",
+    "Builder Base Clock Tower",
+    "Builder Base Barracks",
+    "Builder Base Double Cannon",
+    "Builder Base Army Camp",
+    "Builder Base Hidden Tesla",
+    "Builder Base Cannon",
+    "Builder Base Multi Mortar",
+    "Builder Base Laboratory",
+    "Builder Base Builder Hut",
+    "Builder Base Archer Tower",
+    "Builder Base Reinforcement Camp",
+    "Builder Base Air Defense",
+    "Builder Base Guard Post",
+    "Builder Base Mega Tesla",
+    "Builder Base Battle Machine Altar",
+    "Builder Base Crusher",
+    "Builder Base Roaster",
+    "Builder Base Giant Cannon",
+    "Builder Base Gem Mine",
+    "Workshop",
+    "Cannon NPC", #npc
+    "Goblin Castle", #npc
+    "Dragon Cave", #npc
+    "Builder Base Lava Launcher",
+    "Builder Base Bob Hut", #Home village or builder base?
+    "Builder Base 6th Builder" #includes requirements for 6th builder
+    "Royal Champion Altar",
+    "Scattershot",
+    "Pet House",
+    "Golbin Boss TH", #npc
+    "Blacksmith",
+    "Hero Hall",
+    "Spell Tower",
+    "Troop Cage", #npc
+    "Dragon Lair", #npc
+    "Spell Cage", #npc
+    "PEKKA's Playhouse", #npc
+    "Monolith", 
+    "Builder Base O.T.T.O's Outpost",
+    "Multi Gear Tower",
+    "Builder Base Battle Copter Altar",
+    "Builder Base X-Bow",
+    "Builder Base Healing Hut",
+    "Clashoween Building" #seasonal
+    "Multi-Archer Tower",
+    "Ricochet Cannon",
+    "Firespitter",
+    "Pet Cage", #npc
+]
+
+DEFENSIVE_BUILDING_ORDER = []
+
+RESOURCE_BUILDING_ORDER = []
+
+ARMY_BUILDING_ORDER = []
+
+TRAP_BUILDING_ORDER = []
+
+WALL_BUILDING_ORDER = []
+
+

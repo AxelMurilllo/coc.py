@@ -30,6 +30,9 @@ TARGETS = [
     ("logic/townhall_levels.csv", "townhall_levels.csv"),
     ("logic/character_items.csv", "equipment.csv"),
     ("localization/texts.csv", "texts_EN.csv"),
+    ("logic/traps.csv", "traps.csv"),
+    ("logic/weapons.csv", "weapons.csv"),
+    ("logic/mini_levels.csv", "mini_levels.csv"),
 ]
 
 APK_URL = get_direct_apk_url()
