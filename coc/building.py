@@ -7,7 +7,7 @@ import logging
 from .abc import DataContainer, DataContainerHolder
 from .enums import Resource
 from .miscmodels import TimeDelta, try_enum
-from .utils import UnitStat
+from .utils import UnitStat, BuildingStat
 
 # Path is already defined in abc.py
 from .abc import BUILDING_FILE_PATH
@@ -104,8 +104,8 @@ class Building(DataContainer):
     is_army: bool = False
     is_trap: bool = False
     is_wall: bool = False
-    is_town_hall: bool = False
-    is_builder_hall: bool = False
+    is_home_village: bool = False
+    is_builder_base: bool = False
     
     # Supercharge attributes
     is_supercharged: bool = False
@@ -138,71 +138,95 @@ class Building(DataContainer):
         # Store internal name for townhall level lookups
         cls._internal_name = json_meta.get("Name", name.replace(" ", ""))
         
-        levels_available = [key for key in json_meta.keys() if key.isnumeric()]
+        # Get all numeric keys and sort them
+        levels_available = sorted([int(key) for key in json_meta.keys() if key.isnumeric()])
+        max_level = max(levels_available)
         
-        # Basic properties
-        cls.max_level = len(levels_available)
-        cls.hitpoints = try_enum(UnitStat, [json_meta.get(level, {}).get("Hitpoints") for level in levels_available])
-        cls.level = cls.hitpoints and UnitStat(range(1, len(cls.hitpoints) + 1))
+        # Create stats arrays starting at level 0 (unbuilt)
+        hitpoints_list = [0]  # Level 0 has 0 hitpoints
+        upgrade_costs = []  # Will be populated with costs to reach next level
+        upgrade_times = []  # Will be populated with times to reach next level
+        th_requirements = [1]  # Level 0 requires TH1
+        regeneration_times = [0]  # Level 0 has no regen
+        dps_list = [0]  # Level 0 has no DPS
+        range_list = [0]  # Level 0 has no range
+        attack_speed_list = [0]  # Level 0 has no attack speed
         
-        # Building dimensions
-        cls.width = json_meta.get("1", {}).get("Width", 1)
-        cls.height = json_meta.get("1", {}).get("Height", 1)
+        # For each level from 0 to max_level
+        for level in range(max_level):
+            current_json_level = str(level + 1)  # JSON uses 1-based indexing
+            level_data = json_meta.get(current_json_level, {})
+            
+            # Add stats for current level
+            hitpoints_list.append(level_data.get("Hitpoints", 0))
+            th_requirements.append(level_data.get("TownHallLevel", 1))
+            regeneration_times.append(level_data.get("RegenTime", 0))
+            dps_list.append(level_data.get("DPS", 0))
+            range_list.append(level_data.get("AttackRange", 0))
+            attack_speed_list.append(level_data.get("AttackSpeed", 0))
+            
+            # Get cost and time to reach next level
+            next_json_level = str(level + 2)  # Look ahead one level
+            if next_json_level in json_meta:
+                next_level_data = json_meta.get(next_json_level, {})
+                upgrade_costs.append(next_level_data.get("BuildCost", 0))
+                upgrade_times.append(TimeDelta(
+                    days=next_level_data.get("BuildTimeD", 0),
+                    hours=next_level_data.get("BuildTimeH", 0),
+                    minutes=next_level_data.get("BuildTimeM", 0),
+                    seconds=next_level_data.get("BuildTimeS", 0)
+                ))
+            else:
+                # Max level has no upgrade cost/time
+                upgrade_costs.append(0)
+                upgrade_times.append(TimeDelta())
         
-        # Build costs
-        cls.build_cost = json_meta.get("1", {}).get("BuildCost", 0)
-        build_resource_str = json_meta.get("1", {}).get("BuildResource", "Gold")
+        # Insert build cost/time at the start (level 0 -> 1)
+        level_1_data = json_meta.get("1", {})
+        upgrade_costs.insert(0, level_1_data.get("BuildCost", 0))
+        upgrade_times.insert(0, TimeDelta(
+            days=level_1_data.get("BuildTimeD", 0),
+            hours=level_1_data.get("BuildTimeH", 0),
+            minutes=level_1_data.get("BuildTimeM", 0),
+            seconds=level_1_data.get("BuildTimeS", 0)
+        ))
+        
+        # Set all the stats using BuildingStat instead of UnitStat
+        cls.max_level = max_level
+        cls.hitpoints = try_enum(BuildingStat, hitpoints_list)
+        cls.level = cls.hitpoints and BuildingStat(range(0, len(hitpoints_list)))  # Start from 0
+        
+        # Building dimensions - get from top level attributes since they don't change per level
+        cls.width = json_meta.get("Width", 1)
+        cls.height = json_meta.get("Height", 1)
+        
+        # Build cost and time (cost and time to go from level 0 to 1)
+        cls.build_cost = level_1_data.get("BuildCost", 0)
+        build_resource_str = level_1_data.get("BuildResource", "Gold")
         cls.build_resource = Resource(value=build_resource_str)
         
-        # Build time
-        build_time_d = json_meta.get("1", {}).get("BuildTimeD", 0)
-        build_time_h = json_meta.get("1", {}).get("BuildTimeH", 0)
-        build_time_m = json_meta.get("1", {}).get("BuildTimeM", 0)
-        build_time_s = json_meta.get("1", {}).get("BuildTimeS", 0)
-        cls.build_time = TimeDelta(days=build_time_d, hours=build_time_h, minutes=build_time_m, seconds=build_time_s)
+        cls.build_time = TimeDelta(
+            days=level_1_data.get("BuildTimeD", 0),
+            hours=level_1_data.get("BuildTimeH", 0),
+            minutes=level_1_data.get("BuildTimeM", 0),
+            seconds=level_1_data.get("BuildTimeS", 0)
+        )
         
-        # Upgrade costs and times
-        upgrade_costs = []
-        for level in levels_available:
-            level_cost = json_meta.get(level, {}).get("BuildCost")
-            if level_cost is not None:
-                upgrade_costs.append(level_cost)
-            else:
-                # If no BuildCost, look for UpgradeCost
-                upgrade_costs.append(json_meta.get(level, {}).get("UpgradeCost", 0))
+        # Store upgrade costs and times using BuildingStat
+        cls.upgrade_cost = try_enum(BuildingStat, upgrade_costs)
+        cls.upgrade_resource = Resource(value=level_1_data.get("BuildResource", "Gold"))
+        cls.upgrade_time = try_enum(BuildingStat, upgrade_times)
         
-        cls.upgrade_cost = try_enum(UnitStat, upgrade_costs)
-        cls.upgrade_resource = Resource(value=json_meta.get("1", {}).get("BuildResource", "Gold"))
-        
-        upgrade_times = [
-            TimeDelta(
-                days=json_meta.get(level, {}).get("BuildTimeD", 0),
-                hours=json_meta.get(level, {}).get("BuildTimeH", 0),
-                minutes=json_meta.get(level, {}).get("BuildTimeM", 0),
-                seconds=json_meta.get(level, {}).get("BuildTimeS", 0)
-            )
-            for level in levels_available
-        ]
-        cls.upgrade_time = try_enum(UnitStat, upgrade_times)
-        
-        # Town Hall requirements
-        cls.required_th_level = try_enum(UnitStat, [json_meta.get(level, {}).get("TownHallLevel") for level in levels_available])
-        
-        # Regeneration time
-        regeneration_times = [
-            TimeDelta(seconds=json_meta.get(level, {}).get("RegenTime", 0))
-            for level in levels_available
-        ]
-        cls.regeneration_time = try_enum(UnitStat, regeneration_times)
+        # Store other stats using BuildingStat
+        cls.required_th_level = try_enum(BuildingStat, th_requirements)
+        cls.regeneration_time = try_enum(BuildingStat, regeneration_times)
+        cls.range = try_enum(BuildingStat, range_list)
+        cls.dps = try_enum(BuildingStat, dps_list)
+        cls.attack_speed = try_enum(BuildingStat, attack_speed_list)
         
         # Village type
         cls._is_home_village = False if json_meta.get("VillageType") else True
         cls.village = "home" if cls._is_home_village else "builderBase"
-        
-        # Defensive building properties
-        cls.range = try_enum(UnitStat, [json_meta.get(level, {}).get("AttackRange") for level in levels_available])
-        cls.dps = try_enum(UnitStat, [json_meta.get(level, {}).get("DPS") for level in levels_available])
-        cls.attack_speed = try_enum(UnitStat, [json_meta.get(level, {}).get("AttackSpeed") for level in levels_available])
         
         # Set building type flags based on building class
         building_class = json_meta.get("1", {}).get("BuildingClass", "")

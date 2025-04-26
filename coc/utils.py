@@ -642,3 +642,32 @@ def _get_maybe_first(dict_items, lookup, default=None):
             return items[0]
         except (IndexError, KeyError):
             return default
+
+
+class BuildingStatList(list):
+    """A list subclass that handles building stats, allowing level 0 access.
+    Unlike UnitStatList which is 1-indexed, BuildingStatList is 0-indexed to handle unbuilt buildings.
+    """
+    def __repr__(self):
+        return "<BuildingStatList {}>".format(super().__repr__())
+
+    def __getitem__(self, i):
+        return super().__getitem__(i)
+
+
+class BuildingStat:
+    """Similar to UnitStat but handles building-specific stats that start from level 0."""
+    __slots__ = ("all_levels", )
+
+    def __init__(self, data):
+        self.all_levels = BuildingStatList(data)
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self.all_levels
+
+        return self[instance.level]
+
+    def __getitem__(self, i):
+        return self.all_levels[i]
+
