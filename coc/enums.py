@@ -477,8 +477,32 @@ RESOURCE_BUILDING_ORDER = []
 
 ARMY_BUILDING_ORDER = []
 
-TRAP_BUILDING_ORDER = []
+TRAP_BUILDING_ORDER = [
+    "Bomb",
+    "Spring Trap",
+    "Giant Bomb",
+    "Halloweenbomb", #seasonal
+    "Freeze Trap" #seasonal
+    "Air Bomb",
+    "Seeking Air Mine",
+    "Santa trap", #seasonal
+    "Skeleton Trap",
+    "Freeze Bomb" #seasonal
+    "Builder Base Spring Trap",
+    "Builder Base Push Trap",
+    "Build Base Air Bomb",
+    "Builder Base Bomb",
+    "Builder Base Giant Bomb",
+    "Shrink Trap", #seasonal
+    "Tornado Trap",
+    "Shrink Trap Single Player", #seasonal
+    "Freeze Trap Single Player", #seasonal
+    "Ghost Trap", #seasonal
+    "Giga Bomb",
+]
 
 WALL_BUILDING_ORDER = []
 
-
+TOWN_HALL_WEAPON_ORDER = [
+    
+]
