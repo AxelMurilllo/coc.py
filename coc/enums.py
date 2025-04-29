@@ -483,5 +483,12 @@ BUILDER_BASE_TRAP_ORDER = [
 
 #taken from weapons.json
 TOWN_HALL_WEAPON_ORDER = [
-    
+    "Giga Tesla",
+    "TH13 Giga Inferno",
+    "TH14 Giga Inferno",
+    "TH15 Giga Inferno",
+    "TH16 Giga Inferno",
+    "Inferno Artillery",
 ]
+
+

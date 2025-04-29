@@ -1,3 +1,26 @@
+"""
+MIT License
+
+Copyright (c) 2019-2020 mathsman5133
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import orjson
 
 from typing import Dict, List, Optional, Type, Any, Set
@@ -8,6 +31,7 @@ from .abc import DataContainer, DataContainerHolder
 from .enums import Resource
 from .miscmodels import TimeDelta, try_enum
 from .utils import UnitStat, BuildingStat
+from .townhall import TownHall
 
 # Path is already defined in abc.py
 from .abc import BUILDING_FILE_PATH
@@ -48,8 +72,6 @@ class Building(DataContainer):
         The minimum required townhall level for this building/level.
     regeneration_time: :class:`TimeDelta`
         The time required for this building to regenerate if it has regeneration properties.
-    range: :class:`int`
-        The attack range of the building (for defensive buildings).
     dps: :class:`int`
         The damage per second of the building (for defensive buildings).
     is_defensive: :class:`bool`
@@ -94,9 +116,7 @@ class Building(DataContainer):
     regeneration_time: "TimeDelta"
     
     # For defensive buildings
-    range: int
     dps: int
-    attack_speed: int
     
     # Building type flags
     is_defensive: bool = False
@@ -106,6 +126,8 @@ class Building(DataContainer):
     is_wall: bool = False
     is_home_village: bool = False
     is_builder_base: bool = False
+    is_town_hall: bool = False
+    is_builder_hall: bool = False
     
     # Supercharge attributes
     is_supercharged: bool = False
@@ -113,6 +135,7 @@ class Building(DataContainer):
     
     # Internal TH requirement keys
     _internal_name: str = None
+    _townhall = TownHall()
     
     is_loaded: bool = False
 
@@ -149,8 +172,6 @@ class Building(DataContainer):
         th_requirements = [1]  # Level 0 requires TH1
         regeneration_times = [0]  # Level 0 has no regen
         dps_list = [0]  # Level 0 has no DPS
-        range_list = [0]  # Level 0 has no range
-        attack_speed_list = [0]  # Level 0 has no attack speed
         
         # For each level from 0 to max_level
         for level in range(max_level):
@@ -162,8 +183,6 @@ class Building(DataContainer):
             th_requirements.append(level_data.get("TownHallLevel", 1))
             regeneration_times.append(level_data.get("RegenTime", 0))
             dps_list.append(level_data.get("DPS", 0))
-            range_list.append(level_data.get("AttackRange", 0))
-            attack_speed_list.append(level_data.get("AttackSpeed", 0))
             
             # Get cost and time to reach next level
             next_json_level = str(level + 2)  # Look ahead one level
@@ -220,33 +239,59 @@ class Building(DataContainer):
         # Store other stats using BuildingStat
         cls.required_th_level = try_enum(BuildingStat, th_requirements)
         cls.regeneration_time = try_enum(BuildingStat, regeneration_times)
-        cls.range = try_enum(BuildingStat, range_list)
         cls.dps = try_enum(BuildingStat, dps_list)
-        cls.attack_speed = try_enum(BuildingStat, attack_speed_list)
         
         # Village type
         cls._is_home_village = False if json_meta.get("VillageType") else True
         cls.village = "home" if cls._is_home_village else "builderBase"
         
-        # Set building type flags based on building class
+        # Set building type flags based on building class and preview scenario
         building_class = json_meta.get("1", {}).get("BuildingClass", "")
-        
-        if building_class in ["Defense", "Defensive"]:
-            cls.is_defensive = True
-        elif building_class in ["Resource", "ResourceBuilding"]:
-            cls.is_resource = True
-        elif building_class in ["Army", "ArmyBuilding", "Barrack", "Laboratory"]:
-            cls.is_army = True
-        elif building_class in ["Trap"]:
-            cls.is_trap = True
-        elif building_class in ["Wall"]:
-            cls.is_wall = True
-        
+        preview_scenario = json_meta.get("PreviewScenario", "")
+        shop_building_class = json_meta.get("1", {}).get("ShopBuildingClass", "")
+
+        # Defensive buildings
+        cls.is_defensive = (
+            building_class in ["Defense", "Defensive"] or
+            shop_building_class == "Defense" or
+            preview_scenario in ["Defense", "AirAndGroundDefense", "AirDefense", "DefensiveBuilder"]
+        )
+
+        # Resource buildings
+        cls.is_resource = (
+            building_class in ["Resource", "ResourceBuilding"] or
+            json_meta.get("1", {}).get("SecondaryTargetingClass") == "Resource"
+        )
+
+        # Army buildings
+        cls.is_army = (
+            building_class in ["Army", "ArmyBuilding", "Barrack", "Laboratory"] or
+            shop_building_class == "Army" or
+            json_meta.get("1", {}).get("IsHeroBarrack", False)
+        )
+
+        # Trap buildings
+        cls.is_trap = building_class == "Trap"
+
+        # Wall buildings
+        cls.is_wall = (
+            building_class == "Wall" or
+            preview_scenario == "WallPieces"
+        )
+
         # Special building types
         if name == "Town Hall":
             cls.is_town_hall = True
         elif name == "Builder Hall":
             cls.is_builder_hall = True
+        elif building_class == "Worker2":
+            cls.is_builder = True
+        elif building_class == "Npc":
+            cls.is_npc = True
+        elif building_class == "Helper":
+            cls.is_helper = True
+        elif preview_scenario == "ClanCastle" or "Clan Castle" in name:
+            cls.is_clan_castle = True
         
         cls.is_loaded = True
         return cls
@@ -302,20 +347,10 @@ class Building(DataContainer):
         Optional[:class:`int`]
             The maximum level this building can be at the given townhall level, or None if not available.
         """
-        if not hasattr(cls, '_townhall_requirements') or not cls._townhall_requirements:
+        if not cls._townhall:
             return None
-        
-        # Check if this building is available at this TH level
-        requirements = cls._townhall_requirements.get(townhall_level, {})
-        if cls._internal_name in requirements:
-            return requirements[cls._internal_name]
-        
-        # Handle possible naming variations
-        for key, value in requirements.items():
-            if cls._internal_name in key or cls.name in key:
-                return value
-                
-        return None
+            
+        return cls._townhall.get_max_building_count(cls.name, townhall_level)
     
     def is_valid_for_townhall(self, townhall_level: int) -> bool:
         """Check if this building is valid for the given townhall level.
@@ -365,196 +400,12 @@ class Building(DataContainer):
         return stats
 
 
-class TownHallRequirements:
-    """Represents the building requirements for each townhall level.
-    
-    This class provides functionality to check if a set of buildings
-    meets the requirements for a specific townhall level.
-    """
-    def __init__(self):
-        self.requirements = {}
-        self._load_requirements()
-    
-    def _load_requirements(self):
-        """Load townhall requirements from the JSON file."""
-        try:
-            with open(TOWNHALL_LEVELS_FILE_PATH, "rb") as fp:
-                data = orjson.loads(fp.read())
-                
-            self.requirements = {}
-            
-            for th_level, th_data in data.items():
-                th_level = int(th_level)
-                
-                # Each TH level has a nested object with attack cost as the key
-                # We only care about the first (and only) entry
-                first_key = next(iter(th_data))
-                requirements = {}
-                
-                # Extract building requirements
-                for key, value in th_data[first_key].items():
-                    # Skip non-building keys
-                    if key in [
-                        "Name", "AttackCost", "ResourceStorageLootPercentage", 
-                        "DarkElixirStorageLootPercentage", "ResourceStorageLootCap",
-                        "DarkElixirStorageLootCap", "WarPrizeResourceCap", 
-                        "WarPrizeDarkElixirCap", "LegendPrizeGoldCap",
-                        "LegendPrizeElixirCap", "LegendPrizeDarkElixirCap",
-                        "WarPrizeAllianceExpCap", "CartLootCapResource",
-                        "CartLootReengagementResource", "CartLootCapDarkElixir",
-                        "CartLootReengagementDarkElixir", "ReengagementBuildingBudget",
-                        "ReengagementHeroBudget", "ReengagementWallBudget",
-                        "ReengagementLabBudget", "HeroBoostHours", "PowerBoostHours",
-                        "ResourceProductionBoostHours", "StarBonusBoostHours",
-                        "StrengthMaxTroopTypes", "StrengthMaxSpellTypes",
-                        "StrengthMaxSiegeTypes", "TreasuryWarGold", "TreasuryWarElixir",
-                        "TreasuryWarDarkElixir", "FriendlyCost", "PackElixir", "PackGold",
-                        "PackDarkElixir", "PackGold2", "PackElixir2", "DuelPrizeResourceCap",
-                        "AttackCostVillage2", "ElixirCartStorageCap", "ResourceScalingPercentage",
-                        "ResourceScalingPercentage2", "WarPrizeCommonOreCap", "WarPrizeRareOreCap",
-                        "WarPrizeEpicOreCap", "UnlockStage", "Cannon_gearup", "Archer Tower_gearup", 
-                        "Mortar_gearup", "Builder6Home", "Builder6Unlock"
-                    ]:
-                        continue
-                    
-                    # Store building requirements
-                    try:
-                        requirements[key] = int(value)
-                    except (ValueError, TypeError):
-                        continue
-                
-                self.requirements[th_level] = requirements
-                
-        except Exception as e:
-            logger.error(f"Error loading townhall requirements: {e}")
-            self.requirements = {}
-    
-    def get_building_requirement(self, th_level: int, building_name: str) -> Optional[int]:
-        """Get the required level for a specific building at a townhall level.
-        
-        Parameters
-        ----------
-        th_level: :class:`int`
-            The townhall level to check.
-        building_name: :class:`str`
-            The name of the building to check.
-            
-        Returns
-        -------
-        Optional[:class:`int`]
-            The maximum level allowed for this building, or None if not available.
-        """
-        if th_level not in self.requirements:
-            return None
-            
-        # Check exact match
-        if building_name in self.requirements[th_level]:
-            return self.requirements[th_level][building_name]
-            
-        # Check for partial matches (handles naming variations)
-        for req_name, level in self.requirements[th_level].items():
-            if building_name in req_name or req_name in building_name:
-                return level
-                
-        return None
-    
-    def is_valid_townhall(self, th_level: int, buildings: List[Building]) -> bool:
-        """Check if a set of buildings meets the requirements for a townhall level.
-        
-        Parameters
-        ----------
-        th_level: :class:`int`
-            The townhall level to check.
-        buildings: List[:class:`Building`]
-            The list of buildings to check.
-            
-        Returns
-        -------
-        :class:`bool`
-            True if the buildings meet the requirements for the given townhall level.
-        """
-        if th_level not in self.requirements:
-            return False
-            
-        # Create a set to track required buildings
-        required_buildings = set(self.requirements[th_level].keys())
-        found_buildings = set()
-        
-        # Check each building against requirements
-        for building in buildings:
-            # Skip buildings that aren't for this village
-            if not building.is_home_base:
-                continue
-                
-            # Try to find a matching requirement
-            for req_name in list(required_buildings):
-                # Check various forms of the name
-                if (building.name == req_name or 
-                    building._internal_name == req_name or
-                    building.name in req_name or 
-                    req_name in building.name):
-                    
-                    required_level = self.requirements[th_level][req_name]
-                    
-                    # Check if building meets level requirement
-                    if building.level >= required_level:
-                        found_buildings.add(req_name)
-                        required_buildings.remove(req_name)
-                        break
-        
-        # All required buildings were found and meet level requirements
-        return len(required_buildings) == 0
-    
-    def get_missing_requirements(self, th_level: int, buildings: List[Building]) -> Dict[str, int]:
-        """Get the missing or under-leveled buildings for a townhall level.
-        
-        Parameters
-        ----------
-        th_level: :class:`int`
-            The townhall level to check.
-        buildings: List[:class:`Building`]
-            The list of buildings to check.
-            
-        Returns
-        -------
-        Dict[:class:`str`, :class:`int`]
-            A dictionary of building names to required levels that are missing or under-leveled.
-        """
-        if th_level not in self.requirements:
-            return {}
-            
-        missing_requirements = dict(self.requirements[th_level])
-        
-        # Check each building against requirements
-        for building in buildings:
-            # Skip buildings that aren't for this village
-            if not building.is_home_base:
-                continue
-                
-            # Try to find a matching requirement
-            for req_name in list(missing_requirements.keys()):
-                # Check various forms of the name
-                if (building.name == req_name or 
-                    building._internal_name == req_name or
-                    building.name in req_name or 
-                    req_name in building.name):
-                    
-                    required_level = missing_requirements[req_name]
-                    
-                    # Check if building meets level requirement
-                    if building.level >= required_level:
-                        del missing_requirements[req_name]
-                        break
-        
-        return missing_requirements
-
-
 class BuildingHolder(DataContainerHolder):
     """Holder for all buildings in the game."""
     def __init__(self):
         super().__init__()
         self._buildings = {}
-        self._townhall_requirements = TownHallRequirements()
+        self._townhall = TownHall()
         self.items = []
         self.item_lookup = {}
         
@@ -579,7 +430,7 @@ class BuildingHolder(DataContainerHolder):
                 building_class = type(
                     building_name.replace(" ", ""),
                     (Building,),
-                    {'_townhall_requirements': self._townhall_requirements.requirements}
+                    {'_townhall': self._townhall}
                 )
                 
                 # Load building data
@@ -638,7 +489,7 @@ class BuildingHolder(DataContainerHolder):
         :class:`bool`
             True if the buildings meet the requirements for the given townhall level.
         """
-        return self._townhall_requirements.is_valid_townhall(th_level, buildings)
+        return self._townhall.validate_buildings(buildings, th_level)
     
     def get_missing_requirements(self, th_level: int, buildings: List[Building]) -> Dict[str, int]:
         """Get the missing or under-leveled buildings for a townhall level.
@@ -655,7 +506,7 @@ class BuildingHolder(DataContainerHolder):
         Dict[:class:`str`, :class:`int`]
             A dictionary of building names to required levels that are missing or under-leveled.
         """
-        return self._townhall_requirements.get_missing_requirements(th_level, buildings)
+        return self._townhall.get_missing_requirements(buildings, th_level)
     
     def get_townhall_building_requirements(self, th_level: int) -> Dict[str, int]:
         """Get all building requirements for a specific townhall level.
@@ -670,6 +521,4 @@ class BuildingHolder(DataContainerHolder):
         Dict[:class:`str`, :class:`int`]
             A dictionary of building names to required levels.
         """
-        if th_level in self._townhall_requirements.requirements:
-            return dict(self._townhall_requirements.requirements[th_level])
-        return {} 
+        return self._townhall.get_cumulative_requirements(th_level) 
